@@ -42,7 +42,9 @@ const command_rec mqtt_directives[] =
 
 static apr_pool_t *mqtt_pool = NULL;
 
-/** allocation pool accessor
+/** allocation pool accessor#
+ * use for data more persistent than a request
+ * \return initial pool, different from the request pool
  */
 apr_pool_t *mqtt_get_pool()
     {
@@ -50,10 +52,13 @@ apr_pool_t *mqtt_get_pool()
     }
 
 /** allocation pool setter called once in register_hooks
+ * use for data more persistent than a request
+ * \return initial pool, different from the request pool
  */
 apr_pool_t *mqtt_set_pool(apr_pool_t *p)
     {
     mqtt_pool = p;
+    return p;
     }
 
 /*
@@ -119,12 +124,12 @@ mqtt_set_variables(cmd_parms *cmd, void *cfg, const char *arg)
     {
     mqtt_config *config = (mqtt_config *)cfg;
     DPRINTF("VARS %s\n", arg);
-    if (!config->mqtt_var_array)
+    if (!config->mqtt_var_table)
         {
-        config->mqtt_var_array =
+        config->mqtt_var_table =
             apr_table_make(mqtt_get_pool(), MQTT_MAX_VARS);
         }
-    apr_table_add(config->mqtt_var_array, arg, arg);
+    apr_table_add(config->mqtt_var_table, arg, arg);
 
     return NULL;
     }
@@ -138,12 +143,12 @@ mqtt_set_variable_checks(cmd_parms *cmd, void *cfg, const char *arg1, const char
     {
     mqtt_config *config = (mqtt_config *)cfg;
     DPRINTF("CHECKS %s %s\n", arg1, arg2);
-    if (!config->mqtt_var_re_hash)
+    if (!config->mqtt_var_re_table)
         {
-        config->mqtt_var_re_hash =
+        config->mqtt_var_re_table =
             apr_table_make(mqtt_get_pool(), MQTT_MAX_VARS);
         }
-    apr_table_add(config->mqtt_var_re_hash, arg1, arg2);
+    apr_table_add(config->mqtt_var_re_table, arg1, arg2);
 
     return NULL;
     }

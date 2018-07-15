@@ -1,24 +1,14 @@
 /*
-Copyright (c) 2014-2018 Roger Light <roger@atchoo.org>
-
-All rights reserved. This program and the accompanying materials
-are made available under the terms of the Eclipse Public License v1.0
-and Eclipse Distribution License v1.0 which accompany this distribution.
-
-The Eclipse Public License is available at
-   http://www.eclipse.org/legal/epl-v10.html
-and the Eclipse Distribution License is available at
-  http://www.eclipse.org/org/documents/edl-v10.php.
-
-Contributors:
-   Roger Light - initial implementation and documentation.
-*/
+ * mqtt publish / subscribe common functions
+ */
 
 #ifndef _CLIENT_CONFIG_H
 #define _CLIENT_CONFIG_H
 
 #include <stdio.h>
 #include <mosquitto.h>
+#include "apr.h"
+#include "apr_tables.h"
 
 #ifdef DEBUG
 #define DPRINTF(format, ...) fprintf(stderr, format, ##__VA_ARGS__)
@@ -40,6 +30,12 @@ Contributors:
 #define CLIENT_PUB 1
 #define CLIENT_SUB 2
 
+#define STATUS_CONNECTING 0
+#define STATUS_CONNACK_RECVD 1
+#define STATUS_WAITING 2
+#define STATUS_DISCONNECTING 3
+
+
 struct mosq_config
     {
     char *id;
@@ -52,9 +48,16 @@ struct mosq_config
     bool retain;
     int pub_mode;	 /* pub */
     char *file_input; /* pub */
-    char *message;	/* pub */
+    const char *message;	/* pub */
     long msglen;	  /* pub */
     char *topic;	  /* pub */
+    int mode ;
+    int status ;
+    int connected;
+    int last_mid;
+    int last_mid_sent;
+    int disconnect_sent;
+    int mid_sent ;
     char *bind_address;
 #ifdef WITH_SRV
     bool use_srv;
@@ -97,12 +100,24 @@ struct mosq_config
     char *socks5_username;
     char *socks5_password;
 #endif
+    apr_pool_t *pool;
     };
 
-int client_config_load ( struct mosq_config *config, int pub_or_sub, int argc, char *argv[] );
+int mosquitto__parse_socks_url ( struct mosq_config *cfg, char *url );
+int client_config_line_proc ( struct mosq_config *cfg, int pub_or_sub, int argc, char *argv[] );
+
+int client_config_basic (apr_pool_t *pool,  struct mosq_config *cfg, const char * msg, int msglen);
+int client_config_pub (struct mosq_config *cfg, const char * mqtt_server, int mqtt_port, const char * topic);
+int client_config_sub (struct mosq_config *cfg, const char * mqtt_server, int mqtt_port, const char * topic);
+
+int client_config_load (apr_pool_t *pool, struct mosq_config *config, int pub_or_sub, int argc, char *argv[] );
+
 void client_config_cleanup ( struct mosq_config *cfg );
 int client_opts_set ( struct mosquitto *mosq, struct mosq_config *cfg );
 int client_id_generate ( struct mosq_config *cfg, const char *id_base );
 int client_connect ( struct mosquitto *mosq, struct mosq_config *cfg );
+
+int  mqtt_pub(apr_pool_t *pool, const char * mqtt_server, int mqtt_port, const char * topic, const char * msg, int msglen);
+int  mqtt_sub(apr_pool_t *pool, const char * mqtt_server, int mqtt_port, const char * topic, char ** response, int * responselen);
 
 #endif

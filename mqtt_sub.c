@@ -1,18 +1,7 @@
 /*
-Copyright (c) 2009-2018 Roger Light <roger@atchoo.org>
+ * mqtt subscribe to response
+ */
 
-All rights reserved. This program and the accompanying materials
-are made available under the terms of the Eclipse Public License v1.0
-and Eclipse Distribution License v1.0 which accompany this distribution.
- 
-The Eclipse Public License is available at
-   http://www.eclipse.org/legal/epl-v10.html
-and the Eclipse Distribution License is available at
-  http://www.eclipse.org/org/documents/edl-v10.php.
- 
-Contributors:
-   Roger Light - initial implementation and documentation.
-*/
 
 #include <assert.h>
 #include <errno.h>
@@ -32,6 +21,13 @@ Contributors:
 
 bool process_messages = true;
 int msg_count = 0;
+ 
+
+ /** This is called when a message is received from the broker.
+    * \param mosq object
+    * \param obj config object for this request
+    * \param message message received
+    */
 
 void my_sub_message_callback(struct mosquitto *mosq, void *obj, const struct mosquitto_message *message)
 {
@@ -100,6 +96,20 @@ void my_sub_message_callback(struct mosquitto *mosq, void *obj, const struct mos
 	}
 }
 
+/** This is called when the broker sends a CONNACK message in response to a connection.
+    * mosq	the mosquitto instance making the callback.
+    * obj	the user data provided in mosquitto_new
+    * rc	the return code of the connection response, one of:
+    *   0 - success
+    *   1 - connection refused (unacceptable protocol version)
+    * 2 - connection refused (identifier rejected)
+    * 3 - connection refused (broker unavailable)
+    * 4-255 - reserved for future use
+    * \param mosq object
+    * \param obj config object for this request
+    * \param result from connect operation
+    */
+
 void my_sub_connect_callback(struct mosquitto *mosq, void *obj, int result)
 {
 	int i;
@@ -124,6 +134,17 @@ void my_sub_connect_callback(struct mosquitto *mosq, void *obj, int result)
 	}
 }
 
+
+
+/** This is called when the broker responds to a subscription request.
+    * \param mosq object
+    * \param obj config object for this request
+    * \param result from connect operation
+	* \param mid message id
+	* \param qos_count	the number of granted subscriptions (size of granted_qos).
+	* \param granted_qos	an array of integers indicating the granted QoS for each of the subscriptions.
+    */
+
 void my_sub_subscribe_callback(struct mosquitto *mosq, void *obj, int mid, int qos_count, const int *granted_qos)
 {
 	int i;
@@ -143,24 +164,44 @@ void my_sub_subscribe_callback(struct mosquitto *mosq, void *obj, int mid, int q
 		printf("\n");
 }
 
+/**  This should be used if you want event logging information from the client library.
+ * \param mosq	the mosquitto instance making the callback.
+ * \param obj	the user data provided in mosquitto_new
+ * \param level	the log message level from the values: MOSQ_LOG_INFO MOSQ_LOG_NOTICE MOSQ_LOG_WARNING MOSQ_LOG_ERR MOSQ_LOG_DEBUG
+ * \param str	the message string.
+ */
 void my_sub_log_callback(struct mosquitto *mosq, void *obj, int level, const char *str)
 {
 	printf("%s\n", str);
 }
 
-int mqtt_sub(int argc, char *argv[])
-{
-	struct mosq_config cfg;
-	struct mosquitto *mosq = NULL;
-	int rc;
+/**  single-shot subscribe to one message
+ * \param pool request memory pool
+ * \param mqtt_server server to use
+ * \param mqtt_port server port to use
+ * \param topic topic
+ * \param response response message 
+ * \param responselen response size
+ * \return MOSQ_ERR_SUCCESS or ...
+ */
 
-	rc = client_config_load(&cfg, CLIENT_SUB, argc, argv);
-	if (rc)
+int  mqtt_sub(apr_pool_t *pool, const char * mqtt_server, int mqtt_port, const char * topic, char ** response, int * responselen)
 	{
-		client_config_cleanup(&cfg);
-		fprintf(stderr, "\nmosquitto malconfigured\n");
-		return 1;
-	}
+    struct mosq_config cfg;
+    struct mosquitto *mosq = NULL;
+    int rc;
+
+    DPRINTF("sub %s %d %s: \n", mqtt_server, mqtt_port, topic) ;
+    
+    rc = client_config_basic (pool, &cfg, NULL, 0);
+    if ( rc != MOSQ_ERR_SUCCESS )
+        return rc ;
+
+    rc = client_config_sub (&cfg,  mqtt_server,  mqtt_port, topic) ;
+    if ( rc != MOSQ_ERR_SUCCESS )
+        return rc ;
+
+    DPRINTF("cfg %d: \n", rc) ;
 
 	mosquitto_lib_init();
 
@@ -168,6 +209,8 @@ int mqtt_sub(int argc, char *argv[])
 	{
 		return 1;
 	}
+
+    DPRINTF("cfg id %d: \n", rc) ;
 
 	mosq = mosquitto_new(cfg.id, cfg.clean_session, &cfg);
 	if (!mosq)
@@ -186,10 +229,13 @@ int mqtt_sub(int argc, char *argv[])
 		mosquitto_lib_cleanup();
 		return 1;
 	}
+
 	if (client_opts_set(mosq, &cfg))
 	{
 		return 1;
 	}
+    DPRINTF("cb set: \n" ) ;
+
 	if (cfg.debug)
 	{
 		mosquitto_log_callback_set(mosq, my_sub_log_callback);
@@ -211,9 +257,11 @@ int mqtt_sub(int argc, char *argv[])
 	{
 		rc = 0;
 	}
+
 	if (rc)
 	{
 		fprintf(stderr, "Error: %s\n", mosquitto_strerror(rc));
 	}
+	
 	return rc;
 }

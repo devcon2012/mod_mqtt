@@ -6,6 +6,7 @@
  */
 
 #include <stdio.h>
+#include <regex.h>
 
 #include "mod_mqtt.h"
 #include "mqtt_common.h"
@@ -27,11 +28,34 @@ module AP_MODULE_DECLARE_DATA mqtt_module =
     mqtt_register_hooks /* Our hook registering function */
     };
 
+
+/** Dump a config for debugging
+  * \param config - config to dump
+  * \return 0
+  */
+int    DumpCfg(mqtt_config * config) 
+{
+    DPRINTF ( "-->ctx %s\n", config -> context );
+    DPRINTF ( "-->enb %d\n", config -> enabled );
+    DPRINTF ( "MQTTServer: %s\n", ( config->mqtt_server ? config->mqtt_server : "(NULL)") );
+    DPRINTF ( "MQTTPort: %d\n", config->mqtt_port );
+    DPRINTF ( "MQTTURI: %s\n", (config->mqtt_uri ? config->mqtt_uri : "(NULL)") );
+    DPRINTF ( "vars: %d\n",(int) config ->mqtt_var_table );
+    DPRINTF ( "res: %d\n",(int) config ->mqtt_var_re_table );
+    DPRINTF ( "met: %d\n",(int) config ->methods );
+    DPRINTF ( "enc: %d\n",(int) config ->encodings );
+return 0;
+}
+
 /*
       ==============================================================================
       The hook registration function (also initializes the default config values):
       ==============================================================================
 */
+
+/** register hooks and do init stuff (like setting persistent pool)
+  * \param pool - persistent memory pool
+  */
 
 void mqtt_register_hooks ( apr_pool_t *pool )
     {
@@ -41,6 +65,11 @@ void mqtt_register_hooks ( apr_pool_t *pool )
     ap_hook_handler ( mqtt_handler, NULL, NULL, APR_HOOK_LAST );
     }
 
+/** create a config object for a directory
+  * \param pool - memory pool to use
+  * \param context - location for this conf
+  * \return config for this dir alone
+  */
 void *create_dir_conf ( apr_pool_t *pool, char *context )
     {
     context = context ? context : "(undefined context)";
@@ -57,8 +86,8 @@ void *create_dir_conf ( apr_pool_t *pool, char *context )
         cfg->mqtt_server = NULL;
         cfg->mqtt_uri = NULL;
         cfg->mqtt_port = -1;
-        cfg->mqtt_var_array = NULL;   /* apr_table_copy (pool, const apr_table_t *t); */
-        cfg->mqtt_var_re_hash = NULL; /* apr_table_copy (apr_pool_t *p, const apr_table_t *t) ; */
+        cfg->mqtt_var_table = NULL;   /* apr_table_copy (pool, const apr_table_t *t); */
+        cfg->mqtt_var_re_table = NULL; /* apr_table_copy (apr_pool_t *p, const apr_table_t *t) ; */
         cfg->methods = INVALIDMethod;
         cfg->encodings = INVALIDEncoding;
         }
@@ -67,11 +96,17 @@ void *create_dir_conf ( apr_pool_t *pool, char *context )
     return cfg;
     }
 
+/** merge base and dir config
+  * \param pool - memory pool to use
+  * \param BASE
+  * \param ADD
+  * \return merged config
+  */
 void *merge_dir_conf ( apr_pool_t *pool, void *BASE, void *ADD )
     {
-    mqtt_config *base = ( mqtt_config * ) BASE;                                       /* This is what was set in the parent context */
-    mqtt_config *add = ( mqtt_config * ) ADD;                                         /* This is what is set in the new context */
-    mqtt_config *conf = ( mqtt_config * ) create_dir_conf ( pool, "Merged configuration" ); /* This will be the merged configuration */
+    mqtt_config *base = ( mqtt_config * ) BASE;                                         /* This is what was set in the parent context */
+    mqtt_config *add  = ( mqtt_config * ) ADD;                                          /* This is what is set in the new context */
+    mqtt_config *conf = ( mqtt_config * ) create_dir_conf ( pool, add->context );       /* This will be the merged configuration */
 
     /* Merge configurations */
     DPRINTF ( "--> merge base %s \n", base->context );
@@ -81,21 +116,19 @@ void *merge_dir_conf ( apr_pool_t *pool, void *BASE, void *ADD )
     conf->methods = ( add->methods == INVALIDMethod ) ? base->methods : add->methods;
     conf->encodings = ( add->encodings == INVALIDEncoding ) ? base->encodings : add->encodings;
 
-    if ( add->mqtt_server || base->mqtt_server )
-        conf->mqtt_server = apr_pstrdup ( pool, add->mqtt_server ? add->mqtt_server : base->mqtt_server );
+    conf->mqtt_server =  (add->mqtt_server ? add->mqtt_server : base->mqtt_server) ;
+   
+    conf->mqtt_uri =  (add->mqtt_uri ? add->mqtt_uri : base->mqtt_uri) ;
+   
+    if ( add->mqtt_var_table || base->mqtt_var_table )
+        conf->mqtt_var_table = apr_table_copy ( pool, (add->mqtt_var_table ? add->mqtt_var_table : base->mqtt_var_table) );
 
-    if ( add->mqtt_uri || base->mqtt_uri )
-        conf->mqtt_uri = apr_pstrdup ( pool, add->mqtt_uri ? add->mqtt_uri : base->mqtt_uri );
-
-    if ( add->mqtt_var_array || base->mqtt_var_array )
-        conf->mqtt_var_array = apr_table_copy ( pool, add->mqtt_var_array ? add->mqtt_var_array : base->mqtt_var_array );
-
-    if ( add->mqtt_var_re_hash || base->mqtt_var_re_hash )
-        conf->mqtt_var_re_hash = apr_table_copy ( pool, add->mqtt_var_re_hash ? add->mqtt_var_re_hash : base->mqtt_var_re_hash );
+    if ( add->mqtt_var_re_table || base->mqtt_var_re_table )
+        conf->mqtt_var_re_table = apr_table_copy ( pool, (add->mqtt_var_re_table ? add->mqtt_var_re_table : base->mqtt_var_re_table) );
 
     DPRINTF ( "<--merge  \n" );
 
-    return add;
+    return conf;
     }
 
 /*
@@ -104,6 +137,10 @@ void *merge_dir_conf ( apr_pool_t *pool, void *BASE, void *ADD )
       ==============================================================================
 */
 
+/** handle mqtt requests
+  * \param r request to service
+  * \return status code
+  */
 int mqtt_handler ( request_rec *r )
     {
     if ( !r->handler || strcmp ( r->handler, "mqtt-handler" ) )
@@ -113,11 +150,15 @@ int mqtt_handler ( request_rec *r )
     mqtt_config *config = ( mqtt_config * )
                           ap_get_module_config ( r->per_dir_config, &mqtt_module );
 
+    DPRINTF ( "-->ctx %s\n", config -> context );
+
+    DumpCfg(config) ;
+
     ap_set_content_type ( r, "text/plain" );
     ap_rprintf ( r, "MQTTEnabled: %u\n", config->enabled );
-    ap_rprintf ( r, "MQTTServer: %s\n", config->mqtt_server );
+    ap_rprintf ( r, "MQTTServer: %s\n", ( config->mqtt_server ? config->mqtt_server : "(NULL)") );
     ap_rprintf ( r, "MQTTPort: %d\n", config->mqtt_port );
-    ap_rprintf ( r, "MQTTURI: %s\n", config->mqtt_uri );
+    ap_rprintf ( r, "MQTTURI: %s\n", (config->mqtt_uri ? config->mqtt_uri : "(NULL)") );
     ap_rprintf ( r, "URI: %s\n", r->uri );
     ap_rprintf ( r, "ARGS: %s\n", ( r->args ? r->args : "(NULL)" ) );
 
@@ -185,35 +226,98 @@ int mqtt_handler ( request_rec *r )
                 }
             }
         }
-        if ( ! assert_variables(config, formData) )
-            {
-            return HTTP_BAD_REQUEST;
-            }
+    if ( ! assert_variables(config, formData) )
+        {
+        return HTTP_BAD_REQUEST;
+        }
 
-    const char *action = keyValue ( urlData, "action" );
-    DPRINTF ( "-->handler3 %s\n", ( action ? action : "(NULL)" ) );
-
-    const char *topic = keySubst ( urlData, r->pool, "action", config->mqtt_uri );
+    const char *topic =  kvSubst ( r->pool, formData, config->mqtt_uri ); 
     ap_rprintf ( r, "uri = %s\n", topic );
 
+        {
+        char msg[] = "Message" ;
+        int msglen = sizeof(msg) ;
+        char *response = NULL;
+        int responselen ;
+        int mqtt_err ;
+
+        mqtt_err = mqtt_pub(r->pool, config->mqtt_server, config->mqtt_port, topic, msg, msglen);
+        DPRINTF ( "pub done %d, get resp\n", mqtt_err );
+        if (mqtt_err == 0 )
+            mqtt_err = mqtt_sub(r->pool, config->mqtt_server, config->mqtt_port, topic, &response, &responselen);
+        
+        ap_rprintf ( r, "resp = %s %d\n", (response ? response : "(NULL)"), mqtt_err );
+        }
+        
     return OK;
-    }
+    } 
 
 /** assert variables meet constraints configured
- * 
- * 
- * 
+ * \param variables in this requet
+ * return 1 / OK or 0 / ERROR
  */
 int assert_variables(mqtt_config *config, keyValuePair * kvp)
     {
     int i=0 ;
-    apr_table_t *mqtt_var_array;  /* MQTT variables send , eg "MQTTVariables   Id Name Action" */
-    apr_hash_t *mqtt_var_re_hash; /* MQTT variables check regexpressions, 'MQTTCheckVariable Action ^submit|receive$' */
-   
+    apr_table_t *vars = config -> mqtt_var_table; 
+    apr_table_t *res  = config -> mqtt_var_re_table; 
+
+
+    DPRINTF ( "-->assert %d %d\n", (int) vars, (int) res );
+
+    if ( !vars && !res )
+        return 1 ; /* Nothing to check */
+
+    DPRINTF ( "-->check keys\n" );
+
     while(kvp[i].key)
         {
         /* Check key is allowed at all */
+        const char *val = apr_table_get(vars, kvp[i].key);
+        DPRINTF ( "check %s-> %s : %s\n", kvp[i].key, kvp[i].value, (val ? val : "(NULL)") ) ;
+        if ( ! val )
+            {
+            DPRINTF("Key %s not allowed\n", kvp[i].key );
+            return 0; 
+            }
+        const char *re = apr_table_get(res, kvp[i].key);
+        DPRINTF ( "check key value %s against %s\n", kvp[i].value, (re ? re : "(NULL)") ) ;
+        if ( ! re )
+            {
+            DPRINTF("No RE, continue\n" );
+            continue ;
+            }
+        regex_t compiled;
+        if(regcomp(&compiled, re, REG_EXTENDED) == 0 )
+            {
+            int nsub = compiled.re_nsub;
+            DPRINTF ( "nsub %d\n", nsub ) ;
+            regmatch_t matchptr[nsub+1];
+            int err;
+            if( (err = regexec (&compiled, kvp[i].value, nsub, matchptr, 0)) )
+                {
+                char buf[512] ;
+                regerror (err, &compiled, buf, sizeof(buf) );
+                buf[511] = 0;
+                if(err == REG_NOMATCH)
+                    {
+                    DPRINTF("RE for %s did not match: %s\n", kvp[i].value, buf);
+                    return 0;
+                    }
+                else if(err == REG_ESPACE)
+                    {
+                    DPRINTF("Ran out of memory.\n");
+                    return 0 ;
+                    }
+                DPRINTF("RE Err: %s\n", buf);
+                }
+            DPRINTF ( "Matched!\n" ) ;
+            regfree(&compiled);
+            }
+        else
+            DPRINTF ( "re %s does not compile\n", re)  ;
         i++;
         }
+    DPRINTF ( "-->assert ok\n" );
     return 1 ;
     }

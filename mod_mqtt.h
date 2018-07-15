@@ -1,4 +1,10 @@
 
+/*
+ * mod_mqtt : map http requests to mqtt
+ *
+ * Klaus Ramstöck
+ *
+ */
 
 #ifndef _MOD_MQTT_H
 #define _MOD_MQTT_H
@@ -43,14 +49,14 @@ typedef enum _Encodings
 typedef struct
 {
     char context[256];
-    int enabled;                  /* Enable or disable our module */
-    const char *mqtt_server;      /* MQTT Server spec */
-    int mqtt_port;                /* MQTT Server port */
-    const char * mqtt_uri;         /* MQTT Server uri */
-    apr_hash_t * mqtt_var_array;  /* MQTT variables send , eg "MQTTVariables   Id Name Action" */
-    apr_hash_t * mqtt_var_re_hash; /* MQTT variables check regexpressions, 'MQTTCheckVariable Action ^submit|receive$' */
-    Methods methods;              /* Methods serviced (GET POST ALL) eg MQTTMethods ALL */
-    Encodings encodings;          /* Allowed enctypes for post: application/x-www-form-urlencoded, multipart/form-data, ALL */
+    int enabled;                        /* Enable or disable our module */
+    const char *mqtt_server;            /* MQTT Server spec */
+    int mqtt_port;                      /* MQTT Server port */
+    const char * mqtt_uri;              /* MQTT Server uri */
+    apr_table_t * mqtt_var_table;       /* MQTT variables send , eg "MQTTVariables   Id Name Action" */
+    apr_table_t * mqtt_var_re_table;    /* MQTT variables check regexpressions, 'MQTTCheckVariable Action ^submit|receive$' */
+    Methods methods;                    /* Methods serviced (GET POST ALL) eg MQTTMethods ALL */
+    Encodings encodings;                /* Allowed enctypes for post: application/x-www-form-urlencoded, multipart/form-data, ALL */
 } mqtt_config;
 
 /* Handler for the "MQTTEnabled" directive */

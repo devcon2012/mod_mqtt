@@ -15,4 +15,7 @@ install: mod_mqtt.la
 doc:
 	(cd doc ; doxygen)
 
-.PHONY: doc
+log:
+	tail -f /var/log/apache2/error_log 
+
+.PHONY: doc log
