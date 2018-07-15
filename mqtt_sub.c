@@ -35,6 +35,8 @@ void my_sub_message_callback(struct mosquitto *mosq, void *obj, const struct mos
 	int i;
 	bool res;
 
+    DPRINTF("my_sub_message_callback\n" ) ;
+
 	if (process_messages == false)
 		return;
 
@@ -53,38 +55,15 @@ void my_sub_message_callback(struct mosquitto *mosq, void *obj, const struct mos
 		}
 	}
 
-	if (cfg->verbose)
-	{
-		if (message->payloadlen)
+    DPRINTF("my_sub_message_callback: topic matches\n" ) ;
+
+	if (message->payloadlen)
 		{
-			printf("%s ", message->topic);
-			fwrite(message->payload, 1, message->payloadlen, stdout);
-			if (cfg->eol)
-			{
-				printf("\n");
-			}
+		cfg -> message = apr_pcalloc(cfg->pool,message->payloadlen ) ;
+		cfg -> msglen = message->payloadlen ;
+		memcpy(cfg -> message, message->payload,  message->payloadlen );
 		}
-		else
-		{
-			if (cfg->eol)
-			{
-				printf("%s (null)\n", message->topic);
-			}
-		}
-		fflush(stdout);
-	}
-	else
-	{
-		if (message->payloadlen)
-		{
-			fwrite(message->payload, 1, message->payloadlen, stdout);
-			if (cfg->eol)
-			{
-				printf("\n");
-			}
-			fflush(stdout);
-		}
-	}
+
 	if (cfg->msg_count > 0)
 	{
 		msg_count++;
@@ -114,6 +93,7 @@ void my_sub_connect_callback(struct mosquitto *mosq, void *obj, int result)
 {
 	int i;
 	struct mosq_config *cfg;
+    DPRINTF("my_sub_connect_callback: %d\n", result ) ;
 
 	assert(obj);
 	cfg = (struct mosq_config *)obj;
@@ -122,6 +102,7 @@ void my_sub_connect_callback(struct mosquitto *mosq, void *obj, int result)
 	{
 		for (i = 0; i < cfg->topic_count; i++)
 		{
+	    DPRINTF("my_sub_connect_callback subs %s %d\n", cfg->topics[i], cfg->qos ) ;
 			mosquitto_subscribe(mosq, NULL, cfg->topics[i], cfg->qos);
 		}
 	}
@@ -153,6 +134,8 @@ void my_sub_subscribe_callback(struct mosquitto *mosq, void *obj, int mid, int q
 	assert(obj);
 	cfg = (struct mosq_config *)obj;
 
+	DPRINTF("my_sub_subscribe_callback %d\n", mid ) ;
+
 	if (!cfg->quiet)
 		printf("Subscribed (mid: %d): %d", mid, granted_qos[0]);
 	for (i = 1; i < qos_count; i++)
@@ -172,7 +155,7 @@ void my_sub_subscribe_callback(struct mosquitto *mosq, void *obj, int mid, int q
  */
 void my_sub_log_callback(struct mosquitto *mosq, void *obj, int level, const char *str)
 {
-	printf("%s\n", str);
+	fprintf(stderr, "%s\n", str);
 }
 
 /**  single-shot subscribe to one message
@@ -249,6 +232,7 @@ int  mqtt_sub(apr_pool_t *pool, const char * mqtt_server, int mqtt_port, const c
 		return rc;
 
 	rc = mosquitto_loop_forever(mosq, -1, 1);
+    DPRINTF("mosquitto_loop_forever: %d\n", rc ) ;
 
 	mosquitto_destroy(mosq);
 	mosquitto_lib_cleanup();
@@ -261,6 +245,11 @@ int  mqtt_sub(apr_pool_t *pool, const char * mqtt_server, int mqtt_port, const c
 	if (rc)
 	{
 		fprintf(stderr, "Error: %s\n", mosquitto_strerror(rc));
+	}
+	else
+	{
+		* response = cfg .message ;
+		* responselen = cfg. msglen ;
 	}
 	
 	return rc;

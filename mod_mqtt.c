@@ -154,45 +154,12 @@ int mqtt_handler ( request_rec *r )
 
     DumpCfg(config) ;
 
-    ap_set_content_type ( r, "text/plain" );
-    ap_rprintf ( r, "MQTTEnabled: %u\n", config->enabled );
-    ap_rprintf ( r, "MQTTServer: %s\n", ( config->mqtt_server ? config->mqtt_server : "(NULL)") );
-    ap_rprintf ( r, "MQTTPort: %d\n", config->mqtt_port );
-    ap_rprintf ( r, "MQTTURI: %s\n", (config->mqtt_uri ? config->mqtt_uri : "(NULL)") );
-    ap_rprintf ( r, "URI: %s\n", r->uri );
-    ap_rprintf ( r, "ARGS: %s\n", ( r->args ? r->args : "(NULL)" ) );
-
     keyValuePair *urlData = NULL;
     DPRINTF ( "-->handler2 %s\n", config->context );
 
     if ( config->encodings != MultiPartEncoding )
         {
         urlData = readUrlArgs ( r );
-
-        if ( urlData )
-            {
-            int i;
-
-            for ( i = 0; &urlData[i]; i++ )
-                {
-                if ( urlData[i].key && urlData[i].value )
-                    {
-                    ap_rprintf ( r, "%s = %s\n", urlData[i].key, urlData[i].value );
-                    }
-                else if ( urlData[i].key )
-                    {
-                    ap_rprintf ( r, "%s\n", urlData[i].key );
-                    }
-                else if ( urlData[i].value )
-                    {
-                    ap_rprintf ( r, "= %s\n", urlData[i].value );
-                    }
-                else
-                    {
-                    break;
-                    }
-                }
-            }
         }
 
     keyValuePair *formData = urlData;
@@ -200,44 +167,20 @@ int mqtt_handler ( request_rec *r )
     if ( config->encodings != URLEncoding )
         {
         formData = readPost ( r, urlData );
-
-        if ( formData )
-            {
-            int i;
-
-            for ( i = 0; &formData[i]; i++ )
-                {
-                if ( formData[i].key && formData[i].value )
-                    {
-                    ap_rprintf ( r, "%s = %s\n", formData[i].key, formData[i].value );
-                    }
-                else if ( formData[i].key )
-                    {
-                    ap_rprintf ( r, "%s\n", formData[i].key );
-                    }
-                else if ( formData[i].value )
-                    {
-                    ap_rprintf ( r, "= %s\n", formData[i].value );
-                    }
-                else
-                    {
-                    break;
-                    }
-                }
-            }
         }
+
     if ( ! assert_variables(config, formData) )
         {
         return HTTP_BAD_REQUEST;
         }
 
     const char *topic =  kvSubst ( r->pool, formData, config->mqtt_uri ); 
-    ap_rprintf ( r, "uri = %s\n", topic );
 
         {
-        char msg[] = "Message" ;
-        int msglen = sizeof(msg) ;
+        char * msg = kv2json(r->pool, formData) ;
+        int msglen = strlen(msg) ;
         char *response = NULL;
+        char * data = NULL;
         int responselen ;
         int mqtt_err ;
 
@@ -245,8 +188,19 @@ int mqtt_handler ( request_rec *r )
         DPRINTF ( "pub done %d, get resp\n", mqtt_err );
         if (mqtt_err == 0 )
             mqtt_err = mqtt_sub(r->pool, config->mqtt_server, config->mqtt_port, topic, &response, &responselen);
-        
-        ap_rprintf ( r, "resp = %s %d\n", (response ? response : "(NULL)"), mqtt_err );
+        if (response)
+            {
+            keyValuePair *responseData = json2kv(r->pool, response) ;
+            const char * cType = keyValue(responseData, "content-type");
+            ap_set_content_type(r, (cType ? cType : "text/html"));
+            const char * cData = keyValue(responseData, ".data");
+            ap_rwrite(cData, strlen(cData), r);
+            }
+        else
+            {
+            ap_set_content_type(r, "text/html");
+            ap_rprintf(r, "No response, see log\n");
+            }
         }
         
     return OK;

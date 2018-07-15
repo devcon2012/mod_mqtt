@@ -278,7 +278,40 @@ char * xstrdup(apr_pool_t *p, const char *src)
 const char * kv2json(apr_pool_t *p, keyValuePair *vars)
     {
     DPRINTF ( "--> kv2json %d\n", (int) vars );
-    return NULL ;
+
+    /* Estimate required buffer size */
+    int nSize = 100 ; /* 100 bytes overhead*/
+    for ( int i = 0; vars[i].key; i++ )
+        {
+        if ( vars[i].key )
+            {
+            nSize += strlen(vars[i].value)*2 ;
+            }
+        }
+    DPRINTF ( "--> kv2json %d bytes\n", nSize );
+    int nLeft = nSize ;
+    int nTotal = 0;
+    char *buf = apr_pcalloc(p, nSize) ;
+    char *tgt = buf ;
+    int nPrint = snprintf ( buf, nLeft, "{\n" );
+    nLeft   -= nPrint ;
+    nTotal  += nPrint ;
+
+    for ( int i = 0; vars[i].key; i++ )
+        {
+        if ( vars[i].key )
+            {
+            nPrint = snprintf ( buf+nTotal, nLeft, "\t\"%s\": \"%s\",\n" , vars[i].key, vars[i].value );
+            nLeft -= nPrint ;
+            nTotal += nPrint ;
+            if ( nLeft<=0 )
+                break ;
+            }
+        }
+
+    nPrint = snprintf ( buf+nTotal, nLeft, "}\n" );
+    DPRINTF ( "--> kv2json %d %d bytes:  %s\n", nSize, nLeft, buf );
+    return buf ;
     }
 
 /** convert a keyValuePair datastr to json
@@ -289,5 +322,10 @@ const char * kv2json(apr_pool_t *p, keyValuePair *vars)
 keyValuePair * json2kv(apr_pool_t *p, const char *json)
     {
     DPRINTF ( "--> json2kv %d\n", (int) json );
-    return NULL ;
+    keyValuePair *ret = apr_pcalloc ( p, sizeof ( keyValuePair ) * ( MQTT_MAX_VARS + 2 ) );
+    ret[0].key = "content-type" ;
+    ret[0].value = "text/ascii" ;
+    ret[1].key = ".data" ;
+    ret[1].value = "WURGELYURGEL" ;
+    return ret ;
     }
