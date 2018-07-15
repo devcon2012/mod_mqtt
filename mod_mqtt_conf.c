@@ -193,3 +193,4 @@ mqtt_set_encodings(cmd_parms *cmd, void *cfg, const char *arg)
 
     return NULL;
     }
+

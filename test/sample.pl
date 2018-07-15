@@ -2,6 +2,7 @@
 
 use strict ;
 use Data::Dumper ;
+use File::Temp qw/ tempfile tempdir /;
 
 our $topic = "sensor/13/temperature" ;
 
@@ -25,11 +26,14 @@ sub answer
     {
     my $in = shift ;
 
-    my $reply = 
+    my $data = "bla dasle"; # join "", @$in;
+    my $reply = << "END_REPLY";
         {
-        'content-type'  => 'text/ascii',
-        '.data'         => join('', @$in) ,
-        };
+        "content-type": "text/ascii",
+        ".data": "$data" 
+        }
+END_REPLY
+
     my $ts = localtime ;
     #print STDERR "\n$ts Reply: " . Dumper($reply) ;
     print STDERR "\n$ts Reply: \n";
@@ -41,15 +45,22 @@ sub answer
 sub mqtt_reply
     {
     my $reply_data = shift ;
+    my ($fh, $filename) = tempfile( 'MQTTREPLLXXXXXX', DIR => '/var/tmp');
+        {
+        local $/;
+        print $fh $reply_data;
+        close $fh ;
+        }
 
     # use -l to send stdin
-    open(my $out_fh, "|-", "mosquitto_pub -m 'TST' -t '$topic' ")   
+    open(my $out_fh, "|-", "mosquitto_pub -f $filename -t '$topic' ")   
         or die "Can't start mosquitto_pub: $!";
 
     my $ts = localtime ;
     print STDERR "\n$ts Reply sent.\n" ;
 
     close($out_fh) or die "Can't close mosquitto_pub: $!";
+    unlink $filename or die "Can't unlink tempfile $filename: $!";
     }
 
 while (1)

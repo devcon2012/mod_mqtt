@@ -1,6 +1,12 @@
+#
+# requires mosquitto (https://mosquitto.org) and jansson (http://www.digip.org/jansson)
+#
+#
+#
+
 mod_mqtt.la: keyValuePair.c  keyValuePair.h  mod_mqtt.c  mod_mqtt.h  mqtt_common.c  mqtt_common.h  \
 			mqtt_pub.c  mqtt_sub.c  mod_mqtt_conf.c mod_mqtt_work.c
-	apxs  -D DEBUG -a -l mosquitto -l apr-1 -c mod_mqtt.c mod_mqtt_conf.c mod_mqtt_work.c keyValuePair.c \
+	apxs  -D DEBUG -a -l jansson -l mosquitto -l apr-1 -c mod_mqtt.c mod_mqtt_conf.c mod_mqtt_work.c keyValuePair.c \
 			mqtt_common.c mqtt_pub.c  mqtt_sub.c
 
 clean:

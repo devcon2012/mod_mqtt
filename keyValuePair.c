@@ -10,6 +10,7 @@
 #include "http_request.h"
 #include "keyValuePair.h"
 #include "mod_mqtt.h"
+#include <jansson.h>
 
 /** read urlencoded parameters from request and store as key-value pairs.
   * \param r the http request we process
@@ -277,40 +278,36 @@ char * xstrdup(apr_pool_t *p, const char *src)
   */
 const char * kv2json(apr_pool_t *p, keyValuePair *vars)
     {
-    DPRINTF ( "--> kv2json %d\n", (int) vars );
+    DPRINTF ( "--> kv2json %d\n", (int) vars ) ;
 
-    /* Estimate required buffer size */
-    int nSize = 100 ; /* 100 bytes overhead*/
-    for ( int i = 0; vars[i].key; i++ )
-        {
-        if ( vars[i].key )
-            {
-            nSize += strlen(vars[i].value)*2 ;
-            }
-        }
-    DPRINTF ( "--> kv2json %d bytes\n", nSize );
-    int nLeft = nSize ;
-    int nTotal = 0;
-    char *buf = apr_pcalloc(p, nSize) ;
-    char *tgt = buf ;
-    int nPrint = snprintf ( buf, nLeft, "{\n" );
-    nLeft   -= nPrint ;
-    nTotal  += nPrint ;
+    json_t *json = json_object() ;
 
     for ( int i = 0; vars[i].key; i++ )
         {
         if ( vars[i].key )
             {
-            nPrint = snprintf ( buf+nTotal, nLeft, "\t\"%s\": \"%s\",\n" , vars[i].key, vars[i].value );
-            nLeft -= nPrint ;
-            nTotal += nPrint ;
-            if ( nLeft<=0 )
-                break ;
+            json_t *jv = json_string( vars[i].value );
+            if(jv)
+                {
+                int jErr = json_object_set_new(json, vars[i].key, jv);
+                if ( jErr )
+                    fprintf(stderr, "json error 2 for %s: %s\n", vars[i].key, vars[i].value );
+                }
+            else
+                fprintf(stderr, "json error 1 for %s: %s\n", vars[i].key, vars[i].value );
             }
         }
 
-    nPrint = snprintf ( buf+nTotal, nLeft, "}\n" );
-    DPRINTF ( "--> kv2json %d %d bytes:  %s\n", nSize, nLeft, buf );
+    size_t flags = JSON_SORT_KEYS;
+    char *buf1 = json_dumps(json, flags);
+
+    char *buf = xstrdup(p, buf1);
+
+    free(buf1) ;
+    json_decref(json);
+
+    int size = strlen(buf) ;
+    DPRINTF ( "--> kv2json %d %s bytes:  %s\n", size, buf );
     return buf ;
     }
 
@@ -319,13 +316,36 @@ const char * kv2json(apr_pool_t *p, keyValuePair *vars)
   * \param vars vars to convert
   * \return json string data
   */
-keyValuePair * json2kv(apr_pool_t *p, const char *json)
+keyValuePair * json2kv(apr_pool_t *p, const char *jsonbuf)
     {
-    DPRINTF ( "--> json2kv %d\n", (int) json );
+    DPRINTF ( "--> json2kv %s\n", jsonbuf );
     keyValuePair *ret = apr_pcalloc ( p, sizeof ( keyValuePair ) * ( MQTT_MAX_VARS + 2 ) );
-    ret[0].key = "content-type" ;
-    ret[0].value = "text/ascii" ;
-    ret[1].key = ".data" ;
-    ret[1].value = "WURGELYURGEL" ;
+
+    size_t flags=0;
+    json_error_t error ;
+    json_t *json = json_loads(jsonbuf, flags, &error) ;
+    if ( ! json )
+        {
+        fprintf(stderr, "json error %s\n", error.text) ;
+        return NULL;
+        }
+    int i=0;
+    const char *key;
+    json_t *value;
+    json_object_foreach(json, key, value) 
+        {
+        ret[i].key      = xstrdup(p, key);
+        ret[i].value    = xstrdup(p, json_string_value(value));
+        DPRINTF ( "--> json2kv %d %s %s\n", i, ret[i].key, ret[i].value );
+        i++;
+        if ( i>MQTT_MAX_VARS )
+            {
+            fprintf(stderr, "json2kv: More vars than expected");
+            return ret ;
+            }
+        }
+
+    json_decref(json);
+
     return ret ;
     }
