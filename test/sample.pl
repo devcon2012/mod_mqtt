@@ -3,42 +3,53 @@
 use strict ;
 use Data::Dumper ;
 use File::Temp qw/ tempfile tempdir /;
+use JSON;
 
 our $topic = "sensor/13/temperature" ;
+our $count = 1;
+
+our $in_fh ;
 
 # use msquitto_sub to listen to mqtt, return string data received
 sub mqtt_listen
     {
     my $ts = localtime ;
-    my $ptopic = "$topic/pub";
-    
+    my $ptopic = "sensor/#";
+
     print STDERR "$ts : Subscribe $ptopic ... " ;
-    open(my $in_fh, "-|", "mosquitto_sub -C 1 -t '$ptopic' ")  
-        or die "Can't start mosquitto_sub: $!";
+    if ( ! defined $in_fh )
+        {
+        open($in_fh, "-|", "mosquitto_sub  -t '$ptopic' ")  
+            or die "Can't #start mosquitto_sub: $!";
+        }
 
-    my @data = <$in_fh> ;
-    close($in_fh) ; # or die "Can't close mosquitto_sub: $!";
-
-    print STDERR " got from $ptopic: " . join '', @data ;
-    return \@data ;
+    do 
+        {
+        my $line = <$in_fh> ;
+        die "subscribe at eof"  if ( ! defined $line ) ;
+        print STDERR " got from $ptopic: $line" ;
+        my $data = decode_json $line;
+        return $data ;
+        }
+    while(1);
     }
 
 # construct a reply - hashref with headers + data
 sub answer
     {
     my $in = shift ;
-
-    my $data = "bla dasle"; # join "", @$in;
+    my $query = $in -> {query};
+    my $sensorid = $in -> {sensorid};
+    my $rnd = int rand 1000;
     my $reply = << "END_REPLY";
         {
         "content-type": "text/ascii",
-        ".data": "$data" 
+        ".data": "$query of sensor $sensorid is $rnd" 
         }
 END_REPLY
 
     my $ts = localtime ;
     #print STDERR "\n$ts Reply: " . Dumper($reply) ;
-    print STDERR "\n$ts Reply: \n";
     return $reply ;
     }
 
@@ -47,6 +58,7 @@ END_REPLY
 sub mqtt_reply
     {
     my $reply_data = shift ;
+    return if ( ! $reply_data ) ;
     my ($fh, $filename) = tempfile( 'MQTTREPLLXXXXXX', DIR => '/var/tmp');
         {
         local $/;
@@ -55,12 +67,13 @@ sub mqtt_reply
         }
 
     # use -l to send stdin
-    my $stopic = "$topic/sub" ;
+    my $stopic = "sensorvalues/sub" ;
     open(my $out_fh, "|-", "mosquitto_pub -f $filename -t '$stopic' ")   
         or die "Can't start mosquitto_pub: $!";
 
     my $ts = localtime ;
-    print STDERR "\n$ts Reply sent to $stopic.\n" ;
+    print STDERR "\n$ts Reply $count sent to $stopic.\n" ;
+    $count++;
 
     close($out_fh) or die "Can't close mosquitto_pub: $!";
     unlink $filename or die "Can't unlink tempfile $filename: $!";

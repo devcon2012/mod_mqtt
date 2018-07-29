@@ -214,9 +214,10 @@ int mqtt_handler ( request_rec *r )
             }
         else
             {
-            DPRINTF ( "No response\n" );
-            ap_set_content_type(r, "text/html");
+            LPRINTF ( "No response for %s:%d/%s \n", config->mqtt_server, config->mqtt_port, subtopic );
+            ap_set_content_type(r, "text/ascii");
             ap_rprintf(r, "No response, see log\n");
+		    return HTTP_SERVICE_UNAVAILABLE ;
             }
         }
         
@@ -248,7 +249,7 @@ int assert_variables(mqtt_config *config, keyValuePair * kvp)
         DPRINTF ( "check %s-> %s : %s\n", kvp[i].key, kvp[i].value, (val ? val : "(NULL)") ) ;
         if ( ! val )
             {
-            DPRINTF("Key %s not allowed\n", kvp[i].key );
+            LPRINTF("Key %s not allowed\n", kvp[i].key );
             return 0; 
             }
         const char *re = apr_table_get(res, kvp[i].key);
@@ -272,21 +273,21 @@ int assert_variables(mqtt_config *config, keyValuePair * kvp)
                 buf[511] = 0;
                 if(err == REG_NOMATCH)
                     {
-                    DPRINTF("RE for %s did not match: %s\n", kvp[i].value, buf);
+                    LPRINTF("RE for %s did not match: %s\n", kvp[i].value, buf);
                     return 0;
                     }
                 else if(err == REG_ESPACE)
                     {
-                    DPRINTF("Ran out of memory.\n");
+                    LPRINTF("Ran out of memory.\n");
                     return 0 ;
                     }
-                DPRINTF("RE Err: %s\n", buf);
+                LPRINTF("RE Err: %s\n", buf);
                 }
             DPRINTF ( "Matched!\n" ) ;
             regfree(&compiled);
             }
         else
-            DPRINTF ( "re %s does not compile\n", re)  ;
+            LPRINTF ( "re %s does not compile\n", re)  ;
         i++;
         }
     DPRINTF ( "-->assert ok\n" );

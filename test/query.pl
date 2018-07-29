@@ -22,13 +22,14 @@ print "URL: $url \n";
 
 my ($good, $bad) = (0, 0);
 
-my $c = 200;
+my $c = shift || 1 ;
 my $n = $c ;
 my $start = time ;
-
+my $last = "";
+my $lasterr = "";
    do {
-    #foreach my $pars (qw( sensorid=13&query=temperature )) 
-    foreach my $pars (qw( sensorid=13&query=temperature axtion=illegal )) 
+    #foreach my $pars (qw(  sensorid=13&query=temperature )) 
+    foreach my $pars (qw( sensorid=12&query=humidity sensorid=13&query=temperature sensorid=14&query=voltage )) 
         {
         #print "PARS: $pars\n";
         my $response = $ua->get("$url?$pars");
@@ -36,11 +37,13 @@ my $start = time ;
         if ( $response->is_success ) 
             {
             $good++ ;
+            $last =  $response->decoded_content; 
             #print "Got: " . $response->decoded_content . "\n";    # or whatever
             }
         else 
             {
             $bad++ ;
+            $lasterr = $response->status_line ;
             #print STDERR "" . $response->status_line . "\n";
             }
         }
@@ -48,4 +51,6 @@ my $start = time ;
 
 my $t = time - $start ;
 
+print "Last successful response: '$last'\n";
+print "Last error response: '$lasterr'\n";
 print "Loops:$n, Good: $good, bad: $bad, time: $t [s] \n";
