@@ -10,14 +10,16 @@ our $topic = "sensor/13/temperature" ;
 sub mqtt_listen
     {
     my $ts = localtime ;
-    print STDERR "$ts : Subscribe $topic ... " ;
-    open(my $in_fh, "-|", "mosquitto_sub -C 1 -t '$topic' ")  
+    my $ptopic = "$topic/pub";
+    
+    print STDERR "$ts : Subscribe $ptopic ... " ;
+    open(my $in_fh, "-|", "mosquitto_sub -C 1 -t '$ptopic' ")  
         or die "Can't start mosquitto_sub: $!";
 
     my @data = <$in_fh> ;
-    close($in_fh) or die "Can't close mosquitto_sub: $!";
+    close($in_fh) ; # or die "Can't close mosquitto_sub: $!";
 
-    print STDERR " got: " .join '', @data ;
+    print STDERR " got from $ptopic: " . join '', @data ;
     return \@data ;
     }
 
@@ -53,11 +55,12 @@ sub mqtt_reply
         }
 
     # use -l to send stdin
-    open(my $out_fh, "|-", "mosquitto_pub -f $filename -t '$topic' ")   
+    my $stopic = "$topic/sub" ;
+    open(my $out_fh, "|-", "mosquitto_pub -f $filename -t '$stopic' ")   
         or die "Can't start mosquitto_pub: $!";
 
     my $ts = localtime ;
-    print STDERR "\n$ts Reply sent.\n" ;
+    print STDERR "\n$ts Reply sent to $stopic.\n" ;
 
     close($out_fh) or die "Can't close mosquitto_pub: $!";
     unlink $filename or die "Can't unlink tempfile $filename: $!";

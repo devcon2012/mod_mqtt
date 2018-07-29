@@ -39,9 +39,10 @@ int    DumpCfg(mqtt_config * config)
     DPRINTF ( "-->enb %d\n", config -> enabled );
     DPRINTF ( "MQTTServer: %s\n", ( config->mqtt_server ? config->mqtt_server : "(NULL)") );
     DPRINTF ( "MQTTPort: %d\n", config->mqtt_port );
-    DPRINTF ( "MQTTURI: %s\n", (config->mqtt_uri ? config->mqtt_uri : "(NULL)") );
-    DPRINTF ( "vars: %d\n",(int) config ->mqtt_var_table );
-    DPRINTF ( "res: %d\n",(int) config ->mqtt_var_re_table );
+    DPRINTF ( "MQTT PubTopic: %s\n", (config->mqtt_pubtopic ? config->mqtt_pubtopic : "(NULL)") );
+    DPRINTF ( "MQTT SubTopic: %s\n", (config->mqtt_subtopic ? config->mqtt_subtopic : "(NULL)") );
+    DPRINTF ( "vars: %ld\n",(long int) config ->mqtt_var_table );
+    DPRINTF ( "res: %ld\n",(long int) config ->mqtt_var_re_table );
     DPRINTF ( "met: %d\n",(int) config ->methods );
     DPRINTF ( "enc: %d\n",(int) config ->encodings );
 return 0;
@@ -84,7 +85,8 @@ void *create_dir_conf ( apr_pool_t *pool, char *context )
         strcpy ( cfg->context, context );
         cfg->enabled = -1;
         cfg->mqtt_server = NULL;
-        cfg->mqtt_uri = NULL;
+        cfg->mqtt_pubtopic = NULL;
+        cfg->mqtt_subtopic = NULL;
         cfg->mqtt_port = -1;
         cfg->mqtt_var_table = NULL;   /* apr_table_copy (pool, const apr_table_t *t); */
         cfg->mqtt_var_re_table = NULL; /* apr_table_copy (apr_pool_t *p, const apr_table_t *t) ; */
@@ -118,7 +120,8 @@ void *merge_dir_conf ( apr_pool_t *pool, void *BASE, void *ADD )
 
     conf->mqtt_server =  (add->mqtt_server ? add->mqtt_server : base->mqtt_server) ;
    
-    conf->mqtt_uri =  (add->mqtt_uri ? add->mqtt_uri : base->mqtt_uri) ;
+    conf->mqtt_subtopic =  (add->mqtt_subtopic ? add->mqtt_subtopic : base->mqtt_subtopic) ;
+    conf->mqtt_pubtopic =  (add->mqtt_pubtopic ? add->mqtt_pubtopic : base->mqtt_subtopic) ;
    
     if ( add->mqtt_var_table || base->mqtt_var_table )
         conf->mqtt_var_table = apr_table_copy ( pool, (add->mqtt_var_table ? add->mqtt_var_table : base->mqtt_var_table) );
@@ -143,6 +146,7 @@ void *merge_dir_conf ( apr_pool_t *pool, void *BASE, void *ADD )
   */
 int mqtt_handler ( request_rec *r )
     {
+
     if ( !r->handler || strcmp ( r->handler, "mqtt-handler" ) )
         return ( DECLINED );
 
@@ -174,30 +178,43 @@ int mqtt_handler ( request_rec *r )
         return HTTP_BAD_REQUEST;
         }
 
-    const char *topic =  kvSubst ( r->pool, formData, config->mqtt_uri ); 
+    const char *pubtopic =  kvSubst ( r->pool, formData, config->mqtt_pubtopic ); 
+    const char *subtopic =  kvSubst ( r->pool, formData, config->mqtt_subtopic ); 
 
         {
-        char * msg = kv2json(r->pool, formData) ;
+        const char * msg = kv2json(r->pool, formData) ;
         int msglen = strlen(msg) ;
         char *response = NULL;
-        char * data = NULL;
         int responselen ;
         int mqtt_err ;
 
-        mqtt_err = mqtt_pub(r->pool, config->mqtt_server, config->mqtt_port, topic, msg, msglen);
+        struct mosq_config * cfg = NULL ;
+        struct mosquitto * mosq = NULL;
+
+	    mqtt_err = mqtt_sub_prepare(r->pool, config->mqtt_server, config->mqtt_port, subtopic, &cfg, &mosq);
+	    if ( mqtt_err != MOSQ_ERR_SUCCESS )
+		    return HTTP_SERVICE_UNAVAILABLE ;
+
+        mqtt_err = mqtt_pub(r->pool, config->mqtt_server, config->mqtt_port, pubtopic, msg, msglen);
         DPRINTF ( "pub done %d, get resp\n", mqtt_err );
         if (mqtt_err == 0 )
-            mqtt_err = mqtt_sub(r->pool, config->mqtt_server, config->mqtt_port, topic, &response, &responselen);
+            mqtt_err = mqtt_sub_loop(r->pool, cfg, mosq, &response, &responselen);
+
         if (response)
             {
             keyValuePair *responseData = json2kv(r->pool, response) ;
             const char * cType = keyValue(responseData, "content-type");
+            if ( ! cType )
+                return HTTP_INTERNAL_SERVER_ERROR ;
             ap_set_content_type(r, (cType ? cType : "text/html"));
             const char * cData = keyValue(responseData, ".data");
+            if ( ! cData )
+                return HTTP_INTERNAL_SERVER_ERROR ;
             ap_rwrite(cData, strlen(cData), r);
             }
         else
             {
+            DPRINTF ( "No response\n" );
             ap_set_content_type(r, "text/html");
             ap_rprintf(r, "No response, see log\n");
             }
@@ -217,7 +234,7 @@ int assert_variables(mqtt_config *config, keyValuePair * kvp)
     apr_table_t *res  = config -> mqtt_var_re_table; 
 
 
-    DPRINTF ( "-->assert %d %d\n", (int) vars, (int) res );
+    DPRINTF ( "-->assert %ld %ld\n", (long int) vars, (long int) res );
 
     if ( !vars && !res )
         return 1 ; /* Nothing to check */

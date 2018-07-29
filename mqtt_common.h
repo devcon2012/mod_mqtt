@@ -16,6 +16,8 @@
 #define DPRINTF(fmt, ...)
 #endif
 
+#define LPRINTF(format, ...) fprintf(stderr, format, ##__VA_ARGS__)
+
 #define MESSAGE_COUNT 100000L
 #define MESSAGE_SIZE 1024L
 
@@ -94,6 +96,7 @@ struct mosq_config
     bool verbose;		  /* sub */
     bool eol;			  /* sub */
     int msg_count;		  /* sub */
+    int msg_received;	  /* sub */
 #ifdef WITH_SOCKS
     char *socks5_host;
     int socks5_port;
@@ -119,5 +122,8 @@ int client_connect ( struct mosquitto *mosq, struct mosq_config *cfg );
 
 int  mqtt_pub(apr_pool_t *pool, const char * mqtt_server, int mqtt_port, const char * topic, const char * msg, int msglen);
 int  mqtt_sub(apr_pool_t *pool, const char * mqtt_server, int mqtt_port, const char * topic, char ** response, int * responselen);
+int  mqtt_sub_prepare(apr_pool_t *pool, const char * mqtt_server, int mqtt_port, const char * topic,
+         struct mosq_config ** pcfg,  struct mosquitto ** pmosq);
+int  mqtt_sub_loop(apr_pool_t *pool, struct mosq_config *pcfg,  struct mosquitto *pmosq, char ** response, int * responselen);
 
 #endif

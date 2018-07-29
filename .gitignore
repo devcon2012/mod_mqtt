@@ -3,3 +3,5 @@
 *.lo
 *~
 apache_modules_24.pdf
+.libs
+.vscode

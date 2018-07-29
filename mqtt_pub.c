@@ -195,7 +195,7 @@ int  mqtt_pub(apr_pool_t *pool, const char * mqtt_server, int mqtt_port, const c
     DPRINTF("cfg id %d: \n", rc) ;
 
     mosq = mosquitto_new ( cfg.id, true, &cfg );
-    DPRINTF("cfg new %d: \n", (int) mosq) ;
+    DPRINTF("cfg new %ld: \n", (long int) mosq) ;
 
     if ( !mosq )
         {

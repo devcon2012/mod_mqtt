@@ -35,6 +35,7 @@ void init_config ( apr_pool_t *pool, struct mosq_config *cfg )
     cfg->clean_session = true;
     cfg->eol = true;
     cfg->protocol_version = MQTT_PROTOCOL_V31;
+
     }
 
 /** free memory consumed - noop, we use the request pool
@@ -89,6 +90,8 @@ int client_config_pub (struct mosq_config * cfg, const char * mqtt_server, int m
 
 #ifdef _DEBUG
     cfg->debug = true;
+    cfg->quiet = false;
+
 #endif
 
     cfg->bind_address = cfg->host = xstrdup (pool, mqtt_server );
@@ -617,6 +620,7 @@ int client_connect ( struct mosquitto *mosq, struct mosq_config *cfg )
     return MOSQ_ERR_SUCCESS;
     }
 
+#ifdef LATER_MAYBE
 /* Convert %25 -> %, %3a, %3A -> :, %40 -> @ */
 static int mosquitto__urldecode ( char *str )
     {
@@ -686,4 +690,4 @@ static int mosquitto__urldecode ( char *str )
     return 0;
     }
 
-
+#endif

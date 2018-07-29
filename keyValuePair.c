@@ -7,7 +7,7 @@
 
 #include <stdio.h>
 
-#include "http_request.h"
+#include "apache2/http_request.h"
 #include "keyValuePair.h"
 #include "mod_mqtt.h"
 #include <jansson.h>
@@ -152,7 +152,7 @@ const char *keyValue ( keyValuePair *kvp, const char *key )
 const char *str_replace ( apr_pool_t *p, const char *orig, const char *rep, const char *with )
     {
     char *result;  // the return string
-    char *ins;     // the next insert point
+    const char *ins;     // the next insert point
     char *tmp;     // varies
     int len_rep;   // length of rep (the string to remove)
     int len_with;  // length of with (the string to replace rep with)
@@ -242,7 +242,7 @@ const char *keySubst ( apr_pool_t *p, keyValuePair *kvp, const char *key, const 
   */
 const char * kvSubst (apr_pool_t *p, keyValuePair *kvp, const char *tgt )
     {
-    DPRINTF ( "--> kvSubst %d\n", (int) tgt );
+    DPRINTF ( "--> kvSubst %ld\n", (long int) tgt );
 
     const char * b = xstrdup(p, tgt);
 
@@ -278,7 +278,7 @@ char * xstrdup(apr_pool_t *p, const char *src)
   */
 const char * kv2json(apr_pool_t *p, keyValuePair *vars)
     {
-    DPRINTF ( "--> kv2json %d\n", (int) vars ) ;
+    DPRINTF ( "--> kv2json %ld\n", (long int) vars ) ;
 
     json_t *json = json_object() ;
 
@@ -307,7 +307,8 @@ const char * kv2json(apr_pool_t *p, keyValuePair *vars)
     json_decref(json);
 
     int size = strlen(buf) ;
-    DPRINTF ( "--> kv2json %d %s bytes:  %s\n", size, buf );
+    if ( size<0) size++ ;
+    DPRINTF ( "--> kv2json %d bytes:  %s\n", size, buf );
     return buf ;
     }
 

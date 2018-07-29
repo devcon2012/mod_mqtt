@@ -52,7 +52,8 @@ typedef struct
     int enabled;                        /* Enable or disable our module */
     const char *mqtt_server;            /* MQTT Server spec */
     int mqtt_port;                      /* MQTT Server port */
-    const char * mqtt_uri;              /* MQTT Server uri */
+    const char * mqtt_pubtopic;         /* MQTT Server publish topic for query */
+    const char * mqtt_subtopic;         /* MQTT Server subscribe topic for answer */
     apr_table_t * mqtt_var_table;       /* MQTT variables send , eg "MQTTVariables   Id Name Action" */
     apr_table_t * mqtt_var_re_table;    /* MQTT variables check regexpressions, 'MQTTCheckVariable Action ^submit|receive$' */
     Methods methods;                    /* Methods serviced (GET POST ALL) eg MQTTMethods ALL */
@@ -65,8 +66,11 @@ const char *mqtt_set_enabled(cmd_parms *cmd, void *cfg, const char *arg);
 /* Handler for the "MQTTServer" directive */
 const char *mqtt_set_server(cmd_parms *cmd, void *cfg, const char *arg);
 
-/* Handler for the "MQTTURI" directive */
-const char *mqtt_set_uri(cmd_parms *cmd, void *cfg, const char *arg);
+/* Handler for the "MQTTPubTopic" directive */
+const char *mqtt_set_pubtopic(cmd_parms *cmd, void *cfg, const char *arg);
+
+/* Handler for the "MQTTSubTopic" directive */
+const char *mqtt_set_subtopic(cmd_parms *cmd, void *cfg, const char *arg);
 
 /* Handler for the "MQTTPort" directive */
 const char *mqtt_set_port(cmd_parms *cmd, void *cfg, const char *arg);

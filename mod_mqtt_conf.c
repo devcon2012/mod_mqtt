@@ -23,8 +23,10 @@ const command_rec mqtt_directives[] =
     {
     AP_INIT_TAKE1("MQTTPort", mqtt_set_port, NULL, OR_ALL,
                   "MQTT Server port"),
-    AP_INIT_TAKE1("MQTTURI", mqtt_set_uri, NULL, OR_ALL,
-                  "MQTT Server URI"),
+    AP_INIT_TAKE1("MQTTSubTopic", mqtt_set_subtopic, NULL, OR_ALL,
+                  "MQTT Topic for response"),
+    AP_INIT_TAKE1("MQTTPubTopic", mqtt_set_pubtopic, NULL, OR_ALL,
+                  "MQTT Topic for query"),
     AP_INIT_TAKE1("MQTTServer", mqtt_set_server, NULL, OR_ALL,
                   "MQTT Server"),
     AP_INIT_TAKE1("MQTTEnabled", mqtt_set_enabled, NULL, OR_ALL,
@@ -92,15 +94,27 @@ mqtt_set_server(cmd_parms *cmd, void *cfg, const char *arg)
     return NULL;
     }
 
-/* Handler for the "MQTTURI" directive. Expressions like $action
+/* Handler for the "MQTTPubTopic" directive. Expressions like $action
  * are interpolated from variables. Required - no default
- * Example: MQTTURI "bla/fasel/scep/$action"         
+ * Example: MQTTPubTopic "bla/fasel/scep/$action/pub"         
  */
 const char *
-mqtt_set_uri(cmd_parms *cmd, void *cfg, const char *arg)
+mqtt_set_pubtopic(cmd_parms *cmd, void *cfg, const char *arg)
     {
     mqtt_config *config = (mqtt_config *)cfg;
-    config->mqtt_uri = arg;
+    config->mqtt_pubtopic = arg;
+    return NULL;
+    }
+
+/* Handler for the "MQTTSubTopic" directive. Expressions like $action
+ * are interpolated from variables. Required - no default
+ * Example: MQTTSubTopic "bla/fasel/scep/$action/sub"     
+ */
+const char *
+mqtt_set_subtopic(cmd_parms *cmd, void *cfg, const char *arg)
+    {
+    mqtt_config *config = (mqtt_config *)cfg;
+    config->mqtt_subtopic = arg;
     return NULL;
     }
 
